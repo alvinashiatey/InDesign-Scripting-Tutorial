@@ -44,67 +44,98 @@ String.prototype.trim = function () {
   return this.replace(/^\s+|\s+$/g, "");
 };
 function main() {
-  var csvFilter = function (file) {
-      return /\.csv$/i.test(file.name);
-    },
-    f = File.openDialog("Kindly select your CSV file", csvFilter, false),
+  var f = File.openDialog("Kindly select your CSV file", false),
     docsData = [],
     delimiter = ",";
   if (!f) return;
+  if (!/\.csv$/i.test(f.name)) {
+    alert("Please select a CSV file");
+    return;
+  }
   f.open("r");
   var text = f.read();
   docsData = convert(text, delimiter);
-  var doc = setupDoc();
-  var layer_1 = doc.layers[0];
-  var _loop_1 = function (item) {
-    var txt = "";
-    var textFrame = addPageTextFrame(doc, layer_1);
+  setupDoc();
+  var _loop_1 = function (index, item) {
+    var pg = index === 0 ? addPage(false) : addPage();
+    var moveBottom = 0;
     Object.keys(item).forEach(function (key) {
       if (item[key] === "" || item[key] === " ") return;
-      txt += "".concat(key, ": ").concat(item[key], "\n");
+      var dim = [pg.dim.TOP + moveBottom, pg.dim.LEFT, 40, pg.dim.RIGHT];
+      var _t = addText(pg.page, dim, item[key]);
+      moveBottom +=
+        parseFloat(_t.geometricBounds[2].toString()) -
+        parseFloat(_t.geometricBounds[0].toString());
     });
-    textFrame.contents = txt;
+    moveBottom = 0;
   };
-  for (var _i = 0, docsData_1 = docsData; _i < docsData_1.length; _i++) {
-    var item = docsData_1[_i];
-    _loop_1(item);
+  for (var _i = 0, _a = docsData.entries(); _i < _a.length; _i++) {
+    var _b = _a[_i],
+      index = _b[0],
+      item = _b[1];
+    _loop_1(index, item);
   }
-  doc.documentPreferences.facingPages = true;
 }
 function setupDoc() {
   try {
     var doc =
       app.documents.length > 0 ? app.activeDocument : app.documents.add();
-    doc.documentPreferences.facingPages = false;
+    // needed when working with spreads.
+    doc.viewPreferences.rulerOrigin = RulerOrigin.PAGE_ORIGIN;
+    app.activeDocument.viewPreferences.horizontalMeasurementUnits =
+      MeasurementUnits.MILLIMETERS;
+    app.activeDocument.viewPreferences.verticalMeasurementUnits =
+      MeasurementUnits.MILLIMETERS;
+    doc.textPreferences.smartTextReflow = true;
+    doc.textPreferences.limitToMasterTextFrames = true;
+    doc.textPreferences.addPages = AddPageOptions.END_OF_STORY;
     return doc;
   } catch (e) {
     alert(e);
   }
 }
-function addPageTextFrame(document, layer, page, newPage) {
-  if (page === void 0) {
-    page = document.pages[0];
-  }
+function addPage(newPage) {
   if (newPage === void 0) {
     newPage = true;
   }
-  var np = newPage ? document.pages.add() : page;
-  var pg = {
-    width: parseFloat(document.documentPreferences.pageWidth.toString()),
-    height: parseFloat(document.documentPreferences.pageHeight.toString()),
-    y1: parseFloat(np.marginPreferences.top.toString()),
-  };
-  pg["y2"] = pg["height"] - parseFloat(np.marginPreferences.bottom.toString());
-  if (np.side === PageSideOptions.LEFT_HAND) {
-    pg["x1"] = parseFloat(np.marginPreferences.right.toString());
-    pg["x2"] = pg["width"] - parseFloat(np.marginPreferences.left.toString());
-  } else {
-    pg["x1"] = parseFloat(np.marginPreferences.left.toString());
-    pg["x2"] = pg["width"] - parseFloat(np.marginPreferences.right.toString());
+  if (app.activeDocument) {
+    var doc = app.activeDocument;
+    var page = newPage ? doc.pages.add() : doc.pages[0];
+    var dim = {
+      WIDTH: parseFloat(doc.documentPreferences.pageWidth.toString()),
+      HEIGHT: parseFloat(doc.documentPreferences.pageHeight.toString()),
+      TOP: parseFloat(doc.marginPreferences.top.toString()),
+    };
+    dim.BOTTOM =
+      dim.HEIGHT - parseFloat(doc.marginPreferences.bottom.toString());
+    if (page.side === PageSideOptions.LEFT_HAND) {
+      dim.LEFT = parseFloat(doc.marginPreferences.right.toString());
+      dim.RIGHT = dim.WIDTH - parseFloat(doc.marginPreferences.left.toString());
+    } else {
+      dim.LEFT = parseFloat(doc.marginPreferences.left.toString());
+      dim.RIGHT =
+        dim.WIDTH - parseFloat(doc.marginPreferences.right.toString());
+    }
+    return { page: page, dim: dim };
   }
-  var textFrame = np.textFrames.add(layer);
-  textFrame.geometricBounds = [pg.y1, pg.x1, pg.y2, pg.x2];
-  return textFrame;
+}
+function addText(page, position, text) {
+  if (app.activeDocument) {
+    var doc = app.activeDocument;
+    var layer = void 0;
+    if (doc.layers.item("CSV") == null) {
+      layer = doc.layers.add({ name: "CSV" });
+    } else {
+      layer = doc.layers.item("CSV");
+    }
+    var _tf = page.textFrames.add(layer);
+    _tf.contents = text;
+    _tf.visibleBounds = position;
+    _tf.textFramePreferences.autoSizingReferencePoint =
+      AutoSizingReferenceEnum.TOP_LEFT_POINT;
+    _tf.textFramePreferences.autoSizingType = AutoSizingTypeEnum.HEIGHT_ONLY;
+    return _tf;
+  }
 }
 function detectSeparator(csvFile) {
   var separators = [",", ";", "\t"];
@@ -118,26 +149,36 @@ function detectSeparator(csvFile) {
   }
   return sepMax;
 }
+function csvToArray(text) {
+  var p = "",
+    row = [""],
+    ret = [row],
+    i = 0,
+    r = 0,
+    s = !0,
+    l;
+  for (var _i = 0, text_1 = text; _i < text_1.length; _i++) {
+    l = text_1[_i];
+    if ('"' === l) {
+      if (s && l === p) row[i] += l;
+      s = !s;
+    } else if ("," === l && s) l = row[++i] = "";
+    else if ("\n" === l && s) {
+      if ("\r" === p) row[i] = row[i].slice(0, -1);
+      row = ret[++r] = [(l = "")];
+      i = 0;
+    } else row[i] += l;
+    p = l;
+  }
+  return ret;
+}
 var csvParser = function (strData, header) {
   if (header === void 0) {
     header = true;
   }
-  var objPattern = /(\,|\r?\n|\r|^)(?:"((?:\\.|""|[^\\"])*)"|([^\,"\r\n]*))/gi;
   var headers = strData.split("\n")[0].split(",");
   var data = strData.slice(strData.indexOf("\n") + 1);
-  var arrMatches = null,
-    arrData = [[]];
-  while ((arrMatches = objPattern.exec(data))) {
-    if (
-      arrMatches[1] !== undefined &&
-      arrMatches[1].length &&
-      arrMatches[1] !== ","
-    )
-      arrData.push([]);
-    arrData[arrData.length - 1].push(
-      arrMatches[2] ? arrMatches[2].replace(/[\\"](.)/g, "$1") : arrMatches[3]
-    );
-  }
+  var arrData = csvToArray(data);
   if (header) {
     return arrData.map(function (row) {
       var i = 0;
