@@ -28,13 +28,13 @@ To run a script, we would first open InDesign and from the menu bar we would sel
 
 _Keyboard shortcut:_ `opt+cmd+f11`
 
-From the pop-up dialogue box that appears there would three parent directories.
+From the pop-up dialogue box that appears there would be three parent directories.
 
     ├──Application
     ├──Community
     ├──User
 
-All the first two directories above have within them scripts provided by Adobe themselves. We would be working with the **User** directory. Right click on the User directory and you would be prompted with `Reveal in Finder`. Click that and the directory would be revealed. From this opened directory is where would be saving our scripts to use within inDesign.
+All the first two directories above have within them scripts provided by Adobe themselves. We would be working with the User directory. Right click on the User directory and you would be prompted with Reveal in Finder. Click that and the directory would be revealed. From this opened directory is where we would be saving our scripts to use within inDesign.
 
 ## CSV Loader
 
